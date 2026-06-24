@@ -36,7 +36,7 @@ THRESHOLD = 0.7   # only show a prediction above this confidence
 
 # Optional: map your collected numbers to display names here.
 # e.g. {"0": "A", "1": "B"} — leave empty to show the raw labels.
-DISPLAY_NAMES = {}
+DISPLAY_NAMES = {"0": "Thumbs Up", "1": "all fingers shown", "2" : "BaBa sign"} 
 
 
 def extract_keypoints(results):
@@ -121,7 +121,7 @@ def main():
             cv2.putText(frame, text, (15, 35), cv2.FONT_HERSHEY_SIMPLEX,
                         1.0, (39, 159, 239), 2, cv2.LINE_AA)
 
-            cv2.imshow("Gesto — detect (q to quit)", frame)
+            cv2.imshow("Gesto  detect (q to quit)", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
