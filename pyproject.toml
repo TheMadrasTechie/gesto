@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gesto"
+version = "0.1.0"
+description = "A desktop studio for training custom gesture recognizers"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "numpy>=1.23",
+]
+
+# Heavy / optional pieces are extras so the core installs light and fast.
+[project.optional-dependencies]
+mediapipe = ["mediapipe>=0.10", "opencv-python>=4.8"]
+gui = ["PySide6>=6.6"]          # LGPL — safe for a shippable product
+dev = ["pytest>=7"]
+
+[project.scripts]
+gesto = "gesto.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gesto*"]
