@@ -1,21 +1,22 @@
 # Gesto
 
-A simple gesture-recognition pipeline: collect hand-gesture samples from your
-webcam, train a model, and run it live. Built on MediaPipe (hand landmarks) and
-a Keras LSTM.
+Collect hand-gesture samples from your webcam, train a model, and run it live.
+Gestures can be **any length** — a quick flick or a slow motion — because every
+sample is resampled to a fixed length before training. This also makes the model
+**speed-invariant**: slow and fast versions of the same gesture look the same.
 
 You collect gestures under numeric labels now, and map those numbers to display
-names (letters, words, whatever) at detection time.
+names (letters, words, etc.) at detection time.
 
 ## How it works
 
-Each gesture sample is a short clip of **30 frames**, and each frame is the
-**63 hand-landmark features** MediaPipe gives for one hand (21 points × x, y, z).
-The model learns to map a 30-frame sequence to a gesture class.
+- Each frame = **63 hand-landmark features** (21 points x x, y, z, one hand).
+- Each gesture sample is recorded at its **natural length** (you mark start/stop).
+- Before training/detection, every sample is **resampled to 30 frames** by
+  interpolation, so the LSTM always sees a fixed `(30, 63)` input.
 
 ```
-collect  ->  train  ->  detect
- (.npy)      (.h5)      (live)
+collect (any length)  ->  resample to 30  ->  train (.h5)  ->  detect
 ```
 
 ## Setup
@@ -24,33 +25,35 @@ collect  ->  train  ->  detect
 pip install tensorflow opencv-python mediapipe scikit-learn numpy
 ```
 
-All scripts use **camera index 0**. If your webcam is on a different index,
-change `CAMERA_INDEX` at the top of the relevant file.
+All scripts use **camera index 0**. Change `CAMERA_INDEX` at the top of a file
+if your webcam is elsewhere.
 
-## 1. Collect data — `collect_data.py`
+`gesto_common.py` is shared by all scripts (keypoint extraction + resampling) —
+keep it in the same folder.
 
-Records gesture samples for one class at a time. You pass the class **number**:
+## 1. Collect — `collect_data.py`
+
+Records natural-length samples for one class. Pass the class **number**:
 
 ```bash
-python collect_data.py 0      # collect class "0"
-python collect_data.py 1      # collect class "1"
+python collect_data.py 0
+python collect_data.py 1
 ```
 
-- **30 frames** per sample, **10 samples** per class
-- Press **SPACE** to record the next sample (gives you time to pose your hand)
-- Press **q** to quit
-- Re-running a class **resumes** from where you left off (won't overwrite)
+- Press **SPACE** to start a sample, **SPACE** again to stop.
+- A quick gesture might be 6 frames; a slow one 40 — both are fine.
+- **10 samples** per class. Re-running a class **resumes** (no overwrite).
+- Press **q** to quit. Samples under 2 frames are discarded.
 
-Samples are saved as one array per sample:
+Stored at raw length:
 
 ```
 gesture_data/
-  0/  0.npy 1.npy ... 9.npy     # each file is shape (30, 63)
-  1/  0.npy ...
+  0/  0.npy 1.npy ...     # each (L, 63), L varies per sample
+  1/  ...
 ```
 
-Collect at least **2 classes** before training. Keep your hand in frame for the
-full 30 frames of each sample.
+Collect at least **2 classes** before training.
 
 ## 2. Train — `train.py`
 
@@ -58,17 +61,16 @@ full 30 frames of each sample.
 python train.py
 ```
 
-Loads everything from `gesture_data/`, trains the LSTM, and saves:
+Loads all samples, **resamples each to 30 frames**, trains the LSTM, and saves:
 
-- `gesto_model.h5` — the trained model
-- `labels.json` — maps class index → the number you collected
+- `gesto_model.h5` — the model
+- `labels.json` — class index -> the number you collected
 
-It uses an 80/20 train/validation split with early stopping and dropout, and
-prints the validation accuracy at the end.
+Uses an 80/20 stratified split with early stopping and dropout, and prints
+validation accuracy.
 
-> Note: 10 samples per class is small for an LSTM, so real-world accuracy may be
-> lower than the validation number. If a class performs poorly, collect more
-> samples for it (`collect_data.py` will resume and add to it).
+> 10 samples per class is small for an LSTM, so real-world accuracy may be lower
+> than the validation figure. If a class underperforms, collect more for it.
 
 ## 3. Detect — `detect.py`
 
@@ -76,43 +78,46 @@ prints the validation accuracy at the end.
 python detect.py
 ```
 
-Opens the webcam, draws the hand landmarks, keeps a rolling **30-frame window**,
-and shows the predicted gesture name + confidence on screen. Press **q** to quit.
+Press-to-detect, mirroring collection:
+
+- Press **SPACE** to start, perform the gesture, **SPACE** to stop.
+- The captured frames (any length) are resampled to 30 and classified.
+- Predicted name + confidence stays in the header. **q** to quit.
 
 ### Map numbers to names
 
-Edit the dict at the top of `detect.py` to show friendly names instead of the
-raw numbers you collected:
+Edit the dict at the top of `detect.py`:
 
 ```python
 DISPLAY_NAMES = {"0": "A", "1": "B", "2": "C"}
 ```
 
-Leave it empty (`{}`) to display the raw labels.
+Leave empty (`{}`) to show raw numbers.
 
 ### Tuning
 
-- `THRESHOLD` (default `0.7`) — predictions below this show as `...` instead of
-  a guess. Lower it if detection feels unresponsive; raise it if it's jumpy.
+- `THRESHOLD` (default `0.7`) — below this, the prediction shows as `?`.
+- `TARGET_LEN` (in `gesto_common.py`, default `30`) — the fixed length every
+  gesture is resampled to. Changing it means you must retrain.
 
 ## Files
 
-| File              | Purpose                                  |
-|-------------------|------------------------------------------|
-| `hand_demo.py`    | Minimal landmark-drawing demo            |
-| `collect_data.py` | Capture 30-frame samples per class       |
-| `train.py`        | Train the LSTM, save model + labels      |
-| `detect.py`       | Live recognition with a sliding window   |
+| File              | Purpose                                       |
+|-------------------|-----------------------------------------------|
+| `gesto_common.py` | Shared: keypoint extraction + resampling      |
+| `collect_data.py` | Capture natural-length samples per class      |
+| `train.py`        | Resample to fixed length, train, save         |
+| `detect.py`       | Press-to-detect live recognition              |
 
 ## Notes
 
-- Detection currently uses the **right hand** only, matching how the data is
-  collected. A left-hand-only signer would not be recognized.
-- Predictions run every frame, so labels can flicker between similar gestures.
-  A common fix is to only commit a label once the last few predictions agree.
+- Uses the **right hand** only, matching how data is collected.
+- A 1-frame (static) gesture is handled by repeating the frame to fill 30.
+- Because gestures are variable length, both collection and detection are
+  **press-to-mark** (SPACE start/stop) rather than a fixed rolling window.
 
 ## License
 
-Apache-2.0. The stack is permissive throughout — MediaPipe (Apache-2.0),
-TensorFlow (Apache-2.0), OpenCV (Apache-2.0), NumPy / scikit-learn (BSD) — so it
-can be used in commercial projects without copyleft obligations.
+Apache-2.0. Permissive stack throughout — MediaPipe (Apache-2.0), TensorFlow
+(Apache-2.0), OpenCV (Apache-2.0), NumPy / scikit-learn (BSD) — usable in
+commercial projects without copyleft obligations.
