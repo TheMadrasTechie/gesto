@@ -33,7 +33,7 @@ mp_styles = mp.solutions.drawing_styles
 CAMERA_INDEX = 0
 MODEL_PATH = "gesto_model.h5"
 LABELS_PATH = "labels.json"
-THRESHOLD = 0.7          # only show predictions above this confidence
+THRESHOLD = 0.3          # only show predictions above this confidence
 SMOOTH_WINDOW = 5        # require agreement over this many recent predictions
 
 # Map collected numbers to display names, e.g. {"0": "A", "1": "B"}.
