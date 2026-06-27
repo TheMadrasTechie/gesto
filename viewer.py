@@ -1,38 +1,42 @@
 """
-Gesto — landmark viewer (Streamlit).
+Gesto — gesture explorer (Streamlit).
 
-Browses everything in gesture_data/ and plays each sample back as an animated
-hand skeleton on a black screen. Pure landmark playback — no webcam, no model.
+Pick a gesture class and every stored sample plays back at once as an animated
+hand skeleton on a black screen, laid out in a grid. Pure viewer — no editing,
+no webcam, no model.
 
 Run:
-    pip install streamlit numpy opencv-python
+    pip install streamlit numpy opencv-python pillow
     streamlit run viewer.py
 """
 
 import os
-import time
+import io
 
-import cv2
 import numpy as np
+import cv2
+from PIL import Image
 import streamlit as st
 
 DATA_PATH = "gesture_data"
 FEATURE_DIM = 63
-CANVAS = 480                      # black canvas size (square)
+TILE = 220               # pixel size of each sample tile
+COLS = 4                 # grid columns
+FRAME_MS = 70            # gif frame duration (ms) -> playback speed
 
-# MediaPipe hand connections (pairs of the 21 landmark indices)
+# MediaPipe hand connections (pairs among the 21 landmarks)
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),            # thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),            # index
-    (5, 9), (9, 10), (10, 11), (11, 12),       # middle
-    (9, 13), (13, 14), (14, 15), (15, 16),     # ring
-    (13, 17), (17, 18), (18, 19), (19, 20),    # pinky
-    (0, 17),                                   # palm base
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (17, 18), (18, 19), (19, 20),
+    (0, 17),
 ]
 
-AMBER = (39, 159, 239)   # BGR — Gesto amber
-AMBER_DIM = (23, 117, 186)
-POINT = (117, 199, 250)
+AMBER = (239, 159, 39)       # RGB
+AMBER_DIM = (186, 117, 23)
+POINT = (250, 199, 117)
 
 
 def list_classes():
@@ -52,77 +56,110 @@ def list_samples(class_name):
     )
 
 
-def draw_frame(features):
-    """Render one (63,) frame as a skeleton on a black canvas (RGB)."""
-    img = np.zeros((CANVAS, CANVAS, 3), dtype=np.uint8)
+def render_frame(features, size=TILE):
+    """One (63,) frame -> RGB skeleton image on black."""
+    img = np.zeros((size, size, 3), dtype=np.uint8)
     pts = np.array(features, dtype=np.float32).reshape(21, 3)
 
-    # frame with no detection = all zeros
     if not np.any(pts):
-        cv2.putText(img, "no hand", (CANVAS // 2 - 60, CANVAS // 2),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (90, 90, 90), 2)
-        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        cv2.putText(img, "no hand", (size // 2 - 42, size // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (90, 90, 90), 1, cv2.LINE_AA)
+        return img
 
-    # landmarks are normalized 0..1 (x, y); map to canvas with a margin
-    m = 40
-    xs = (pts[:, 0] * (CANVAS - 2 * m) + m).astype(int)
-    ys = (pts[:, 1] * (CANVAS - 2 * m) + m).astype(int)
+    m = 24
+    xs = (pts[:, 0] * (size - 2 * m) + m).astype(int)
+    ys = (pts[:, 1] * (size - 2 * m) + m).astype(int)
 
     for a, b in HAND_CONNECTIONS:
         cv2.line(img, (xs[a], ys[a]), (xs[b], ys[b]), AMBER_DIM, 2, cv2.LINE_AA)
     for i in range(21):
-        cv2.circle(img, (xs[i], ys[i]), 4, POINT, -1, cv2.LINE_AA)
-    # wrist a touch bigger
-    cv2.circle(img, (xs[0], ys[0]), 6, AMBER, -1, cv2.LINE_AA)
+        cv2.circle(img, (xs[i], ys[i]), 3, POINT, -1, cv2.LINE_AA)
+    cv2.circle(img, (xs[0], ys[0]), 5, AMBER, -1, cv2.LINE_AA)
+    return img
 
-    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+@st.cache_data(show_spinner=False)
+def build_gif(class_name, sample_file):
+    """Render a sample's frames into a looping GIF (bytes).
+
+    Each frame is drawn on an opaque black square and the GIF is saved without
+    transparency, so tiles are fully black with no white show-through.
+    """
+    arr = np.load(os.path.join(DATA_PATH, class_name, sample_file))
+    if arr.ndim != 2 or arr.shape[1] != FEATURE_DIM:
+        return None
+
+    pil_frames = []
+    for i in range(arr.shape[0]):
+        rgb = render_frame(arr[i])               # already on black, (TILE,TILE,3)
+        black = Image.new("RGB", (TILE, TILE), (0, 0, 0))
+        black.paste(Image.fromarray(rgb), (0, 0))
+        pil_frames.append(black)
+    if not pil_frames:
+        return None
+
+    buf = io.BytesIO()
+    pil_frames[0].save(
+        buf, format="GIF", save_all=True, append_images=pil_frames[1:],
+        duration=FRAME_MS, loop=0, disposal=1,
+    )
+    return buf.getvalue()
 
 
 def main():
-    st.set_page_config(page_title="Gesto Viewer", layout="centered")
+    st.set_page_config(page_title="Gesto Explorer", layout="wide")
+    # Force a black background everywhere and make every image tile a fixed
+    # black square, so partially-sized GIFs never leave white gaps.
     st.markdown(
-        "<h2 style='color:#EF9F27;'>Gesto — Landmark Viewer</h2>",
+        """
+        <style>
+        .stApp { background-color: #000000; }
+        div[data-testid="stImage"] {
+            background-color: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            aspect-ratio: 1 / 1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        div[data-testid="stImage"] img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #000000;
+        }
+        div[data-testid="stImage"] figcaption { color: #EF9F27 !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<h2 style='color:#EF9F27;margin-bottom:0;'>Gesto — Gesture Explorer</h2>",
         unsafe_allow_html=True,
     )
 
     classes = list_classes()
     if not classes:
-        st.warning(f"No data found in '{DATA_PATH}/'. Collect some gestures first.")
+        st.warning(f"No data in '{DATA_PATH}/'. Collect some gestures first.")
         return
 
-    col1, col2 = st.columns(2)
-    with col1:
-        cls = st.selectbox("Class", classes)
+    cls = st.selectbox("Select a gesture", classes)
     samples = list_samples(cls)
-    with col2:
-        if not samples:
-            st.info("No samples in this class.")
-            return
-        sample = st.selectbox("Sample", samples)
+    st.caption(f"Class '{cls}'  ·  {len(samples)} samples (all looping)")
 
-    arr = np.load(os.path.join(DATA_PATH, cls, sample))
-    if arr.ndim != 2 or arr.shape[1] != FEATURE_DIM:
-        st.error(f"Unexpected shape {arr.shape}; expected (frames, 63).")
+    if not samples:
+        st.info("No samples in this class.")
         return
 
-    n_frames = arr.shape[0]
-    st.caption(f"Class '{cls}'  ·  {sample}  ·  {n_frames} frames")
-
-    fps = st.slider("Playback speed (fps)", 2, 30, 12)
-    play = st.button("▶ Play")
-
-    placeholder = st.empty()
-
-    if play:
-        for i in range(n_frames):
-            placeholder.image(draw_frame(arr[i]),
-                              caption=f"frame {i + 1}/{n_frames}")
-            time.sleep(1.0 / fps)
-    else:
-        # show first frame by default, plus a manual scrubber
-        idx = st.slider("Frame", 0, n_frames - 1, 0)
-        placeholder.image(draw_frame(arr[idx]),
-                          caption=f"frame {idx + 1}/{n_frames}")
+    cols = st.columns(COLS)
+    for i, sample in enumerate(samples):
+        gif = build_gif(cls, sample)
+        with cols[i % COLS]:
+            if gif is None:
+                st.error(f"{sample}: bad shape")
+            else:
+                st.image(gif, caption=sample, use_column_width=True)
 
 
 if __name__ == "__main__":
