@@ -26,9 +26,9 @@ from tensorflow.keras.utils import to_categorical
 from gesto_common import NUM_FRAMES, FEATURE_DIM
 
 DATA_PATH = "gesture_data"
-MODEL_PATH = "gesto_model.h5"
+MODEL_PATH = "alphabet_model.h5"
 LABELS_PATH = "labels.json"
-EPOCHS = 300
+EPOCHS = 500
 BATCH_SIZE = 16
 
 

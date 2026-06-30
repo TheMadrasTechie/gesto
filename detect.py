@@ -31,13 +31,13 @@ mp_drawing = mp.solutions.drawing_utils
 mp_styles = mp.solutions.drawing_styles
 
 CAMERA_INDEX = 0
-MODEL_PATH = "gesto_model.h5"
+MODEL_PATH = "alphabet_model.h5"
 LABELS_PATH = "labels.json"
 THRESHOLD = 0.3          # only show predictions above this confidence
 SMOOTH_WINDOW = 5        # require agreement over this many recent predictions
 
 # Map collected numbers to display names, e.g. {"0": "A", "1": "B"}.
-DISPLAY_NAMES = {"0": "A", "1": "B", "2": "C"}
+DISPLAY_NAMES = {"0": "A", "1": "B", "2": "C", "3": "D", "4": "E", "5": "F", "6": "G", "7": "H", "8": "I", "9": "J","10": "K", "11": "L", "12": "M", "13": "N", "14": "O", "15": "P", "16": "Q", "17": "R", "18": "S", "19": "T", "20": "U", "21": "V", "22": "W", "23": "X", "24": "Y", "25": "Z"}
 
 
 def draw(frame, results):
