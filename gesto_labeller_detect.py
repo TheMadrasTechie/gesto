@@ -33,7 +33,7 @@ POSE_N = 33      # x,y,z,visibility -> 4 each
 HAND_N = 21      # x,y,z            -> 3 each
 
 # Which feature dim corresponds to which region (matches Gesto Labeller)
-DIM_TO_REGION = {126: "hands", 132: "pose", 32: "legs", 258: "full"}
+DIM_TO_REGION = {63: "hand", 126: "hands", 132: "pose", 32: "legs", 258: "full"}
 
 # Optional display-name map, e.g. {"0": "A", "1": "B"}
 DISPLAY_NAMES = {}
@@ -55,6 +55,13 @@ def _hand_xyz(landmarks):
 
 def extract_region(res, region):
     """Return the feature vector for the requested region from Holistic results."""
+    if region == "hand":
+        # single hand, 63 features: prefer right hand, fall back to left
+        if res.right_hand_landmarks:
+            return _hand_xyz(res.right_hand_landmarks)
+        if res.left_hand_landmarks:
+            return _hand_xyz(res.left_hand_landmarks)
+        return np.zeros(HAND_N * 3, np.float32)               # 63
     if region == "hands":
         lh = _hand_xyz(res.left_hand_landmarks)
         rh = _hand_xyz(res.right_hand_landmarks)
@@ -98,6 +105,9 @@ def main():
         raw = index_to_name[idx]
         return DISPLAY_NAMES.get(str(raw), raw)
 
+    def label_for_name(raw):
+        return DISPLAY_NAMES.get(str(raw), raw)
+
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
         print(f"Could not open camera {args.camera}.")
@@ -135,6 +145,16 @@ def main():
                                       verbose=0)[0]
                 idx = int(np.argmax(probs))
                 conf = float(probs[idx])
+
+                # print this frame's top prediction + every class confidence
+                ranked = sorted(
+                    ((index_to_name[i], float(p)) for i, p in enumerate(probs)),
+                    key=lambda kv: kv[1], reverse=True,
+                )
+                all_conf = "  ".join(f"{label_for_name(n)}:{p:.2f}"
+                                     for n, p in ranked)
+                print(f"[frame] top={label_for(idx)} ({conf:.2f})  |  {all_conf}")
+
                 recent.append(idx if conf >= args.threshold else -1)
                 if len(recent) == args.smooth:
                     top, count = Counter(recent).most_common(1)[0]

@@ -1,11 +1,9 @@
 {
   "labels": {
-    "0": "hand_clapping",
-    "1": "hand_waving",
-    "2": "jogging",
-    "3": "running",
-    "4": "walking"
+    "0": "Baba",
+    "1": "Hi",
+    "2": "thumbs up"
   },
   "frames": 30,
-  "feature_dim": 132
+  "feature_dim": 63
 }

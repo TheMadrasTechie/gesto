@@ -54,28 +54,40 @@ def resample_sequence(seq, target_len):
                     axis=1).astype(np.float32)
 
 
+def _coerce_sample(arr):
+    """Return a (L, D) sequence from either a (D,) static or (T, D) sequence array."""
+    arr = np.asarray(arr, dtype=np.float32)
+    if arr.ndim == 1:              # static: one frame -> (1, D)
+        return arr.reshape(1, -1)
+    if arr.ndim == 2:              # sequence: (T, D)
+        return arr
+    return None
+
+
 def load_from_manifest(project_dir):
-    """Load sequence samples using manifest.csv. Returns (samples, labels, dim)."""
+    """Load static AND sequence samples using manifest.csv.
+    Returns (samples, labels, dim)."""
     manifest = os.path.join(project_dir, "manifest.csv")
     samples, labels, dims = [], [], set()
 
     with open(manifest, newline="") as f:
         for row in csv.DictReader(f):
-            if row.get("mode", "").strip().lower() != "sequence":
+            path = row.get("path", "")
+            if not path:
                 continue
-            path = row["path"]
             if not os.path.isabs(path):
                 path = os.path.join(project_dir, path)
             if not os.path.exists(path):
                 print(f"  missing file, skipped: {path}")
                 continue
             arr = np.load(path)
-            if arr.ndim != 2:
-                print(f"  not a sequence (shape {arr.shape}), skipped: {path}")
+            seq = _coerce_sample(arr)
+            if seq is None:
+                print(f"  odd shape {arr.shape}, skipped: {path}")
                 continue
-            samples.append(arr.astype(np.float32))
+            samples.append(seq)
             labels.append(row["label"])
-            dims.add(arr.shape[1])
+            dims.add(seq.shape[1])
 
     if len(dims) > 1:
         raise RuntimeError(f"Mixed feature dims in data: {sorted(dims)}. "
@@ -85,24 +97,25 @@ def load_from_manifest(project_dir):
 
 
 def load_from_folders(project_dir):
-    """Fallback: scan data/sequence/<label>/<uid>.npy if no manifest."""
-    seq_root = os.path.join(project_dir, "data", "sequence")
+    """Fallback: scan data/sequence/ AND data/static/ folders if no manifest."""
     samples, labels, dims = [], [], set()
-    if not os.path.isdir(seq_root):
-        return samples, labels, 0
-    for label in sorted(os.listdir(seq_root)):
-        ldir = os.path.join(seq_root, label)
-        if not os.path.isdir(ldir):
+    for mode in ("sequence", "static"):
+        root = os.path.join(project_dir, "data", mode)
+        if not os.path.isdir(root):
             continue
-        for f in sorted(os.listdir(ldir)):
-            if not f.endswith(".npy"):
+        for label in sorted(os.listdir(root)):
+            ldir = os.path.join(root, label)
+            if not os.path.isdir(ldir):
                 continue
-            arr = np.load(os.path.join(ldir, f))
-            if arr.ndim != 2:
-                continue
-            samples.append(arr.astype(np.float32))
-            labels.append(label)
-            dims.add(arr.shape[1])
+            for f in sorted(os.listdir(ldir)):
+                if not f.endswith(".npy"):
+                    continue
+                seq = _coerce_sample(np.load(os.path.join(ldir, f)))
+                if seq is None:
+                    continue
+                samples.append(seq)
+                labels.append(label)
+                dims.add(seq.shape[1])
     if len(dims) > 1:
         raise RuntimeError(f"Mixed feature dims: {sorted(dims)}.")
     dim = dims.pop() if dims else 0
@@ -117,7 +130,10 @@ def load_data(project_dir, frames):
         samples, labels, dim = load_from_folders(project_dir)
 
     if not samples:
-        raise RuntimeError("No sequence samples found in this project.")
+        raise RuntimeError(
+            "No samples found in this project (checked manifest + "
+            "data/sequence and data/static)."
+        )
 
     # resample every sample to a common length so shapes match
     X = np.array([resample_sequence(s, frames) for s in samples],
