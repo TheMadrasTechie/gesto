@@ -135,9 +135,12 @@ def load_data(project_dir, frames):
             "data/sequence and data/static)."
         )
 
-    # resample every sample to a common length so shapes match
-    X = np.array([resample_sequence(s, frames) for s in samples],
-                 dtype=np.float32)
+    # Samples are already normalized by Gesto Labeller (landmarks.py) at capture
+    # time, so we only resample to a common length here — no re-normalization.
+    X = np.array(
+        [resample_sequence(s, frames) for s in samples],
+        dtype=np.float32,
+    )
 
     class_names = sorted(set(labels))
     label_map = {name: i for i, name in enumerate(class_names)}

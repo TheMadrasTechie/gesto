@@ -1,17 +1,17 @@
 """
-Gesto — detect for Gesto Labeller models (Holistic, any region).
+Gesto — detect for Gesto Labeller models (uses the Labeller's own landmarks.py).
 
-Runs live recognition using a model trained by gesto_labeller_train.py. It reads
-the feature dim + frame count from labels.json and extracts the MATCHING region
-from MediaPipe Holistic, so it works for Hands(126)/Pose(132)/Legs(32)/Full(258).
+This imports Gesto Labeller's extraction + normalization so live features are
+IDENTICAL to the data the model trained on. That is the fix for "everything
+maps to one class": train and detect now share one extraction pipeline.
 
-Needs:
+Requirements (in the same folder):
+    landmarks.py        (from Gesto Labeller — extract_vector + normalize_vector)
     gesto_model.h5
-    labels.json     (written by gesto_labeller_train.py; carries frames + dim)
+    labels.json         (carries frames + feature_dim, written by train script)
 
 Run:
-    python gesto_labeller_detect.py
-    python gesto_labeller_detect.py --model asl_model.h5 --labels labels.json
+    python gesto_labeller_detect.py --model gesto_model.h5 --labels labels.json
 
 Press 'q' to quit.
 """
@@ -25,61 +25,24 @@ import numpy as np
 import mediapipe as mp
 from tensorflow.keras.models import load_model
 
+# Gesto Labeller's canonical extraction + normalization
+from landmarks import extract_vector, normalize_vector, region_dim
+
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
-# Landmark counts per region of MediaPipe Holistic
-POSE_N = 33      # x,y,z,visibility -> 4 each
-HAND_N = 21      # x,y,z            -> 3 each
-
-# Which feature dim corresponds to which region (matches Gesto Labeller)
-DIM_TO_REGION = {63: "hand", 126: "hands", 132: "pose", 32: "legs", 258: "full"}
+# Map (region, hands-mode) by the feature dim stored in labels.json.
+# 63 -> Hands/one, 126 -> Hands/two, 132 -> Pose, 32 -> Legs, 258 -> Full
+DIM_TO_REGION = {
+    63:  ("Hands", "one"),
+    126: ("Hands", "two"),
+    132: ("Pose", "two"),
+    32:  ("Legs", "two"),
+    258: ("Full", "two"),
+}
 
 # Optional display-name map, e.g. {"0": "A", "1": "B"}
 DISPLAY_NAMES = {}
-
-
-def _pose_xyzv(res):
-    if res.pose_landmarks:
-        return np.array([[l.x, l.y, l.z, l.visibility]
-                         for l in res.pose_landmarks.landmark], np.float32).flatten()
-    return np.zeros(POSE_N * 4, np.float32)
-
-
-def _hand_xyz(landmarks):
-    if landmarks:
-        return np.array([[l.x, l.y, l.z] for l in landmarks.landmark],
-                        np.float32).flatten()
-    return np.zeros(HAND_N * 3, np.float32)
-
-
-def extract_region(res, region):
-    """Return the feature vector for the requested region from Holistic results."""
-    if region == "hand":
-        # single hand, 63 features: prefer right hand, fall back to left
-        if res.right_hand_landmarks:
-            return _hand_xyz(res.right_hand_landmarks)
-        if res.left_hand_landmarks:
-            return _hand_xyz(res.left_hand_landmarks)
-        return np.zeros(HAND_N * 3, np.float32)               # 63
-    if region == "hands":
-        lh = _hand_xyz(res.left_hand_landmarks)
-        rh = _hand_xyz(res.right_hand_landmarks)
-        return np.concatenate([lh, rh])                       # 126
-    if region == "pose":
-        return _pose_xyzv(res)                                # 132
-    if region == "legs":
-        # legs = 8 lower-body pose joints (indices 23..30) x (x,y,z,vis) = 32
-        if res.pose_landmarks:
-            lm = res.pose_landmarks.landmark
-            return np.array([[lm[i].x, lm[i].y, lm[i].z, lm[i].visibility]
-                             for i in range(23, 31)], np.float32).flatten()
-        return np.zeros(32, np.float32)
-    if region == "full":
-        return np.concatenate([_pose_xyzv(res),
-                               _hand_xyz(res.left_hand_landmarks),
-                               _hand_xyz(res.right_hand_landmarks)])   # 258
-    raise ValueError(f"unknown region {region}")
 
 
 def main():
@@ -96,10 +59,12 @@ def main():
     index_to_name = {int(k): v for k, v in meta["labels"].items()}
     frames = int(meta["frames"])
     dim = int(meta["feature_dim"])
-    region = DIM_TO_REGION.get(dim)
-    if region is None:
+
+    if dim not in DIM_TO_REGION:
         raise RuntimeError(f"Unknown feature dim {dim}; can't pick a region.")
-    print(f"Model: {frames} frames x {dim} feats  ->  region '{region}'")
+    region, hands = DIM_TO_REGION[dim]
+    print(f"Model: {frames} frames x {dim} feats  ->  region '{region}' "
+          f"(hands={hands})")
 
     def label_for(idx):
         raw = index_to_name[idx]
@@ -116,6 +81,7 @@ def main():
     seq = deque(maxlen=frames)
     recent = deque(maxlen=args.smooth)
     shown_label, shown_conf = "", 0.0
+    zero_vec = np.zeros(dim, dtype=np.float32)
 
     with mp_holistic.Holistic(min_detection_confidence=0.5,
                               min_tracking_confidence=0.5) as holistic:
@@ -134,11 +100,17 @@ def main():
                                       mp_holistic.HAND_CONNECTIONS)
             mp_drawing.draw_landmarks(frame, res.right_hand_landmarks,
                                       mp_holistic.HAND_CONNECTIONS)
-            if region in ("pose", "legs", "full"):
+            if region in ("Pose", "Legs", "Full"):
                 mp_drawing.draw_landmarks(frame, res.pose_landmarks,
                                           mp_holistic.POSE_CONNECTIONS)
 
-            seq.append(extract_region(res, region))
+            # EXACT same extraction + normalization the Labeller used to save data
+            raw = extract_vector(res, region, hands)
+            if raw is None:
+                feat = zero_vec
+            else:
+                feat = normalize_vector(raw, region, hands).astype(np.float32)
+            seq.append(feat)
 
             if len(seq) == frames:
                 probs = model.predict(np.expand_dims(np.array(seq), 0),
@@ -146,7 +118,7 @@ def main():
                 idx = int(np.argmax(probs))
                 conf = float(probs[idx])
 
-                # print this frame's top prediction + every class confidence
+                # per-frame printout: top + all class confidences
                 ranked = sorted(
                     ((index_to_name[i], float(p)) for i, p in enumerate(probs)),
                     key=lambda kv: kv[1], reverse=True,
