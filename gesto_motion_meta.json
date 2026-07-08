@@ -5,5 +5,6 @@
     "2": "thumbs up"
   },
   "frames": 30,
-  "feature_dim": 63
+  "feature_dim": 63,
+  "n_classes": 3
 }

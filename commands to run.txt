@@ -1,0 +1,6 @@
+python gesto_labeller_train.py --project "D:\products\gesto-labeller\gesto_projects\motion-hands"
+python gesto_labeller_detect.py --model gesto_model.h5 --labels labels.json
+
+
+
+python convert_tflite.py --model gesto_model.h5 --labels labels.json --out gesto_motion.tflite
