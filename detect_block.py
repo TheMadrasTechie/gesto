@@ -109,6 +109,10 @@ def main():
             raw = extract_vector(res, region, hands)
             feat = zero_vec if raw is None else \
                 normalize_vector(raw, region, hands).astype(np.float32)
+            _buf = "FEAT_FULL: "
+            for i in range(0, len(feat), 3):
+                _buf += f"[{feat[i]:.3f},{feat[i+1]:.3f},{feat[i+2]:.3f}] "
+            print(_buf)
             buffer.append(feat)
 
             # once a full block is collected, predict on it and reset
