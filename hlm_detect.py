@@ -88,6 +88,10 @@ def main():
 
         # extract + normalize exactly like training
         feat = normalize_vector(landmarks_to_vector(result))
+        _buf = "FEAT_FULL: "
+        for i in range(0, len(feat), 3):
+            _buf += f"[{feat[i]:.3f},{feat[i+1]:.3f},{feat[i+2]:.3f}] "
+        print(_buf)
         seq.append(feat)
 
         if len(seq) == frames:
