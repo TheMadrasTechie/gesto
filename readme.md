@@ -1,123 +1,78 @@
-# Gesto
+# Gesto Training & Detection
 
-Collect hand-gesture samples from your webcam, train a model, and run it live.
-Gestures can be **any length** — a quick flick or a slow motion — because every
-sample is resampled to a fixed length before training. This also makes the model
-**speed-invariant**: slow and fast versions of the same gesture look the same.
+Train and run gesture models from your Gesto Labeller datasets. Two model
+types, each with its own train + detect script:
 
-You collect gestures under numeric labels now, and map those numbers to display
-names (letters, words, etc.) at detection time.
+- **Static** (single frame): each gesture is a held pose. Small Dense network.
+- **Sequence** (LSTM): each gesture is a motion over time. Stacked LSTM.
 
-## How it works
+## Files
 
-- Each frame = **63 hand-landmark features** (21 points x x, y, z, one hand).
-- Each gesture sample is recorded at its **natural length** (you mark start/stop).
-- Before training/detection, every sample is **resampled to 30 frames** by
-  interpolation, so the LSTM always sees a fixed `(30, 63)` input.
-
-```
-collect (any length)  ->  resample to 30  ->  train (.h5)  ->  detect
-```
+| File | What it does |
+|---|---|
+| `gesto_data.py` | Loads a Gesto project's `.npy` data (shared by both trainers) |
+| `train_static.py` | Trains the single-frame classifier |
+| `train_lstm.py` | Trains the motion (LSTM) classifier |
+| `gesto_landmarks.py` | Live landmark extraction (same as the app's capture) |
+| `detect_static.py` | Live/video single-frame detection |
+| `detect_lstm.py` | Live/video motion detection (rolling window) |
+| `convert_tflite.py` | Converts either model to TFLite (LSTM-safe) |
 
 ## Setup
 
 ```bash
-pip install tensorflow opencv-python mediapipe scikit-learn numpy
+pip install tensorflow opencv-python mediapipe numpy
 ```
 
-All scripts use **camera index 0**. Change `CAMERA_INDEX` at the top of a file
-if your webcam is elsewhere.
+## Get your project path
 
-`gesto_common.py` is shared by all scripts (keypoint extraction + resampling) —
-keep it in the same folder.
+In Gesto Labeller, click **Copy path** on a project card. That's the
+`project_dir` these scripts take.
 
-## 1. Collect — `collect_data.py`
-
-Records natural-length samples for one class. Pass the class **number**:
+## Train
 
 ```bash
-python collect_data.py 0
-python collect_data.py 1
+# single-frame model
+python train_static.py "D:\products\gesto-labeller\gesto_projects\alphabets"
+
+# motion model
+python train_lstm.py "D:\products\gesto-labeller\gesto_projects\motion-hands"
 ```
 
-- Press **SPACE** to start a sample, **SPACE** again to stop.
-- A quick gesture might be 6 frames; a slow one 40 — both are fine.
-- **10 samples** per class. Re-running a class **resumes** (no overwrite).
-- Press **q** to quit. Samples under 2 frames are discarded.
+Each writes to an `artifacts_*/` folder: the `.keras` model plus `labels.json`
+(classes, feature dim, region, and — for LSTM — the sequence length).
 
-Stored at raw length:
-
-```
-gesture_data/
-  0/  0.npy 1.npy ...     # each (L, 63), L varies per sample
-  1/  ...
+Check your data first with:
+```bash
+python gesto_data.py "path\to\project"
 ```
 
-Collect at least **2 classes** before training.
-
-## 2. Train — `train.py`
+## Detect
 
 ```bash
-python train.py
+python detect_static.py artifacts_static            # webcam
+python detect_lstm.py   artifacts_lstm              # webcam
+python detect_lstm.py   artifacts_lstm --source clip.mp4 --threshold 0.6
 ```
 
-Loads all samples, **resamples each to 30 frames**, trains the LSTM, and saves:
+Press **q** to quit. Detection uses MediaPipe Holistic — the same engine Gesto
+captures with — so the landmarks match what the model was trained on.
 
-- `gesto_model.h5` — the model
-- `labels.json` — class index -> the number you collected
-
-Uses an 80/20 stratified split with early stopping and dropout, and prints
-validation accuracy.
-
-> 10 samples per class is small for an LSTM, so real-world accuracy may be lower
-> than the validation figure. If a class underperforms, collect more for it.
-
-## 3. Detect — `detect.py`
+## Convert to TFLite (for Flutter etc.)
 
 ```bash
-python detect.py
+python convert_tflite.py artifacts_lstm/lstm_model.keras
 ```
 
-Press-to-detect, mirroring collection:
-
-- Press **SPACE** to start, perform the gesture, **SPACE** to stop.
-- The captured frames (any length) are resampled to 30 and classified.
-- Predicted name + confidence stays in the header. **q** to quit.
-
-### Map numbers to names
-
-Edit the dict at the top of `detect.py`:
-
-```python
-DISPLAY_NAMES = {"0": "A", "1": "B", "2": "C"}
-```
-
-Leave empty (`{}`) to show raw numbers.
-
-### Tuning
-
-- `THRESHOLD` (default `0.7`) — below this, the prediction shows as `?`.
-- `TARGET_LEN` (in `gesto_common.py`, default `30`) — the fixed length every
-  gesture is resampled to. Changing it means you must retrain.
-
-## Files
-
-| File              | Purpose                                       |
-|-------------------|-----------------------------------------------|
-| `gesto_common.py` | Shared: keypoint extraction + resampling      |
-| `collect_data.py` | Capture natural-length samples per class      |
-| `train.py`        | Resample to fixed length, train, save         |
-| `detect.py`       | Press-to-detect live recognition              |
+For LSTM models this clones with `unroll=True` and verifies the TFLite output
+matches Keras (plain conversion of LSTM layers can silently be wrong). It prints
+a max diff and PASS/WARNING.
 
 ## Notes
 
-- Uses the **right hand** only, matching how data is collected.
-- A 1-frame (static) gesture is handled by repeating the frame to fill 30.
-- Because gestures are variable length, both collection and detection are
-  **press-to-mark** (SPACE start/stop) rather than a fixed rolling window.
-
-## License
-
-Apache-2.0. Permissive stack throughout — MediaPipe (Apache-2.0), TensorFlow
-(Apache-2.0), OpenCV (Apache-2.0), NumPy / scikit-learn (BSD) — usable in
-commercial projects without copyleft obligations.
+- **Region must match**: a model trained on Hands data (dim 63/126) can't run on
+  Pose data (132). `labels.json` records the region so detection stays consistent.
+- **Enough samples**: with fewer than ~5 per class, accuracy is unreliable. The
+  trainers warn you.
+- **One-hand vs two-hand**: recorded in `labels.json` and applied automatically
+  at detection.
