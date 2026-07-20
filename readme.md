@@ -1,78 +1,53 @@
-# Gesto Training & Detection
+# Gesto LSTM (notebook-style) — per region
 
-Train and run gesture models from your Gesto Labeller datasets. Two model
-types, each with its own train + detect script:
+LSTM training + live detection that matches your `Alphabet_recognition.ipynb`:
+fixed-length sequences (no zero-padding), your exact architecture
+(64→128→64 LSTM + Dense 64→32→softmax, relu), and the rolling `sequence[-T:]`
+detection window with a stability check.
 
-- **Static** (single frame): each gesture is a held pose. Small Dense network.
-- **Sequence** (LSTM): each gesture is a motion over time. Stacked LSTM.
+Works for all five region types — pass `--region`:
 
-## Files
-
-| File | What it does |
-|---|---|
-| `gesto_data.py` | Loads a Gesto project's `.npy` data (shared by both trainers) |
-| `train_static.py` | Trains the single-frame classifier |
-| `train_lstm.py` | Trains the motion (LSTM) classifier |
-| `gesto_landmarks.py` | Live landmark extraction (same as the app's capture) |
-| `detect_static.py` | Live/video single-frame detection |
-| `detect_lstm.py` | Live/video motion detection (rolling window) |
-| `convert_tflite.py` | Converts either model to TFLite (LSTM-safe) |
+| region        | dim | what it captures            |
+|---------------|-----|-----------------------------|
+| `hands_right` | 63  | right hand only (notebook)  |
+| `hands_two`   | 126 | both hands                  |
+| `pose`        | 132 | full body                   |
+| `legs`        | 32  | lower body                  |
+| `full`        | 258 | body + both hands           |
 
 ## Setup
-
 ```bash
 pip install tensorflow opencv-python mediapipe numpy
 ```
 
-## Get your project path
-
-In Gesto Labeller, click **Copy path** on a project card. That's the
-`project_dir` these scripts take.
-
 ## Train
-
+Point at a Gesto project folder (the **Copy path** button gives you this):
 ```bash
-# single-frame model
-python train_static.py "D:\products\gesto-labeller\gesto_projects\alphabets"
-
-# motion model
-python train_lstm.py "D:\products\gesto-labeller\gesto_projects\motion-hands"
+python train.py "D:\...\gesto_projects\alphabets" --region hands_right
+python train.py "D:\...\gesto_projects\motion-hands" --region hands_two --epochs 400
+python train.py "D:\...\gesto_projects\walk-proj" --region pose
 ```
+Writes `artifacts_<region>/model.keras` + `labels.json`.
 
-Each writes to an `artifacts_*/` folder: the `.keras` model plus `labels.json`
-(classes, feature dim, region, and — for LSTM — the sequence length).
-
-Check your data first with:
-```bash
-python gesto_data.py "path\to\project"
-```
+Only sequences with at least `--seq_len` frames (default 30) are used; longer
+ones are trimmed to the first `seq_len`. This matches the notebook, where every
+video was exactly 30 frames — so **capture your gestures at a consistent length
+(~30 frames)** for best results.
 
 ## Detect
-
 ```bash
-python detect_static.py artifacts_static            # webcam
-python detect_lstm.py   artifacts_lstm              # webcam
-python detect_lstm.py   artifacts_lstm --source clip.mp4 --threshold 0.6
+python detect.py artifacts_hands_right
+python detect.py artifacts_pose --source clip.mp4 --threshold 0.6
 ```
-
-Press **q** to quit. Detection uses MediaPipe Holistic — the same engine Gesto
-captures with — so the landmarks match what the model was trained on.
-
-## Convert to TFLite (for Flutter etc.)
-
-```bash
-python convert_tflite.py artifacts_lstm/lstm_model.keras
-```
-
-For LSTM models this clones with `unroll=True` and verifies the TFLite output
-matches Keras (plain conversion of LSTM layers can silently be wrong). It prints
-a max diff and PASS/WARNING.
+Rolling window of the last `seq_len` frames, predicts once full, and only
+accepts a label once the last `--stable` (default 10) predictions agree — the
+same logic as your notebook. Press **q** to quit.
 
 ## Notes
-
-- **Region must match**: a model trained on Hands data (dim 63/126) can't run on
-  Pose data (132). `labels.json` records the region so detection stays consistent.
-- **Enough samples**: with fewer than ~5 per class, accuracy is unreliable. The
-  trainers warn you.
-- **One-hand vs two-hand**: recorded in `labels.json` and applied automatically
-  at detection.
+- **Region must match the project.** `train.py` checks the `.npy` dimension and
+  stops if you pass the wrong `--region`.
+- This is the fixed-length approach from your notebook. It differs from the
+  earlier padded scripts — for the alphabet/fingerspelling style where every
+  clip is the same length, this is the right one.
+- Convert to TFLite with the `convert_tflite.py` from the earlier bundle (the
+  `unroll=True` version) — it works on these models unchanged.

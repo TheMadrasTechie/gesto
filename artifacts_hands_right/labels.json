@@ -1,0 +1,12 @@
+{
+  "labels": [
+    "BAba",
+    "HI",
+    "Thumbs UP"
+  ],
+  "region_key": "hands_right",
+  "input_dim": 63,
+  "seq_len": 30,
+  "gesto_region": "Hands",
+  "hands": "one"
+}
