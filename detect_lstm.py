@@ -23,7 +23,7 @@ import cv2
 import tensorflow as tf
 from tensorflow import keras
 
-from gesto_landmarks import extract_vector, make_holistic
+from gesto_landmarks import extract_vector, make_holistic, draw_region
 
 
 def main():
@@ -58,6 +58,9 @@ def main():
         vec = extract_vector(res, region, hands)
         window.append(vec if (vec is not None and vec.shape[0] == D)
                       else np.zeros(D, np.float32))
+
+        # draw the skeleton for this project's region onto the frame
+        draw_region(frame, res, region, hands)
 
         label, prob = "—", 0.0
         if len(window) == T:

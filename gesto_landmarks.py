@@ -76,3 +76,81 @@ def make_holistic():
     return mp.solutions.holistic.Holistic(
         static_image_mode=False, model_complexity=1,
         min_detection_confidence=0.6, min_tracking_confidence=0.5)
+
+
+# ---- drawing -------------------------------------------------------------
+
+# 21-joint hand skeleton (MediaPipe hand connection pairs)
+_HAND_BONES = [
+    (0, 1), (1, 2), (2, 3), (3, 4),          # thumb
+    (0, 5), (5, 6), (6, 7), (7, 8),          # index
+    (5, 9), (9, 10), (10, 11), (11, 12),     # middle
+    (9, 13), (13, 14), (14, 15), (15, 16),   # ring
+    (13, 17), (17, 18), (18, 19), (19, 20),  # pinky
+    (0, 17),                                  # palm base
+]
+
+# full-body pose skeleton (subset of MediaPipe POSE_CONNECTIONS, the visible ones)
+_POSE_BONES = [
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),      # arms + shoulders
+    (11, 23), (12, 24), (23, 24),                          # torso
+    (23, 25), (25, 27), (27, 29), (27, 31),                # left leg
+    (24, 26), (26, 28), (28, 30), (28, 32),                # right leg
+]
+
+# legs-only: indices are into the 8 saved leg points (hips, knees, ankles, feet)
+# LEG_POSE_IDX order = [23,24,25,26,27,28,31,32] -> local 0..7
+_LEG_BONES = [(0, 2), (2, 4), (4, 6), (1, 3), (3, 5), (5, 7), (0, 1)]
+
+_ACCENT = (40, 160, 230)   # BGR — orange-ish dot
+_BONE = (60, 180, 75)      # BGR — green bone
+
+
+def _draw_points(frame, pts_xy, bones):
+    import cv2
+    h, w = frame.shape[:2]
+    for a, b in bones:
+        if a < len(pts_xy) and b < len(pts_xy):
+            ax, ay = pts_xy[a]; bx, by = pts_xy[b]
+            if (ax or ay) and (bx or by):       # skip zero (missing) points
+                cv2.line(frame, (int(ax * w), int(ay * h)),
+                         (int(bx * w), int(by * h)), _BONE, 2, cv2.LINE_AA)
+    for (x, y) in pts_xy:
+        if x or y:
+            cv2.circle(frame, (int(x * w), int(y * h)), 3, _ACCENT, -1, cv2.LINE_AA)
+
+
+def _hand_xy(hand):
+    return [(lm.x, lm.y) for lm in hand.landmark] if hand else []
+
+
+def draw_region(frame, res, region, hands="two"):
+    """Draw the skeleton for the model's region onto the BGR frame in place."""
+    if region == "Hands":
+        if hands == "one":
+            single = res.right_hand_landmarks or res.left_hand_landmarks
+            if single:
+                _draw_points(frame, _hand_xy(single), _HAND_BONES)
+        else:
+            for h in (res.left_hand_landmarks, res.right_hand_landmarks):
+                if h:
+                    _draw_points(frame, _hand_xy(h), _HAND_BONES)
+
+    elif region == "Pose":
+        if res.pose_landmarks:
+            pts = [(lm.x, lm.y) for lm in res.pose_landmarks.landmark]
+            _draw_points(frame, pts, _POSE_BONES)
+
+    elif region == "Legs":
+        if res.pose_landmarks:
+            lms = res.pose_landmarks.landmark
+            pts = [(lms[i].x, lms[i].y) for i in LEG_POSE_IDX]   # 8 points
+            _draw_points(frame, pts, _LEG_BONES)
+
+    elif region == "Full":
+        if res.pose_landmarks:
+            pts = [(lm.x, lm.y) for lm in res.pose_landmarks.landmark]
+            _draw_points(frame, pts, _POSE_BONES)
+        for h in (res.left_hand_landmarks, res.right_hand_landmarks):
+            if h:
+                _draw_points(frame, _hand_xy(h), _HAND_BONES)

@@ -22,7 +22,7 @@ import cv2
 import tensorflow as tf
 from tensorflow import keras
 
-from gesto_landmarks import extract_vector, make_holistic
+from gesto_landmarks import extract_vector, make_holistic, draw_region
 
 
 def main():
@@ -53,6 +53,9 @@ def main():
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         res = holistic.process(rgb)
         vec = extract_vector(res, region, hands)
+
+        # draw the skeleton for this project's region onto the frame
+        draw_region(frame, res, region, hands)
 
         label, prob = "—", 0.0
         if vec is not None and vec.shape[0] == meta["input_dim"]:
