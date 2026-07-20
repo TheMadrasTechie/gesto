@@ -82,6 +82,17 @@ def main():
         print(f"   {name:20} {c} sequences")
     if counts.min() < 5:
         print("WARNING: some classes have <5 sequences; expect unreliable accuracy.")
+    # sequence-length variance directly hurts live detection: if clips vary a
+    # lot in length, most training samples become mostly zero-padding while live
+    # detection feeds full windows. Flag it so you can capture more consistently.
+    raw_lens = [int((X[i].any(axis=1)).sum()) for i in range(len(X))]
+    if raw_lens:
+        lo, hi = min(raw_lens), max(raw_lens)
+        print(f"Sequence lengths: min={lo}, max={hi}, T(pad)={T}")
+        if hi - lo > max(8, T // 2):
+            print("WARNING: large variation in clip length. For steadier live "
+                  "detection, try to record each gesture at a similar duration, "
+                  "or pass a fixed --seq_len close to your typical clip length.")
 
     rng = np.random.default_rng(42)
     idx = rng.permutation(len(X))
