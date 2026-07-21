@@ -91,11 +91,27 @@ def main():
     rng = np.random.default_rng(42); idx = rng.permutation(len(X))
     X, y = X[idx], y[idx]
 
+    # class weights counter the collapse-to-one-class failure when the dataset
+    # is imbalanced: rarer classes get proportionally more weight in the loss
+    counts = np.bincount(y, minlength=len(labels)).astype(float)
+    if counts.min() == 0:
+        empty = [labels[i] for i, c in enumerate(counts) if c == 0]
+        raise SystemExit(
+            f"These classes have no usable sequences: {empty}. "
+            f"Run  python diagnose.py {args.project_dir} --seq_len {args.seq_len}  "
+            f"to see why (usually clips shorter than seq_len).")
+    class_weight = {i: float(counts.sum() / (len(counts) * c))
+                    for i, c in enumerate(counts)}
+    if max(counts) >= 3 * min(counts):
+        print(f"NOTE: imbalanced classes {dict(zip(labels, counts.astype(int)))} "
+              f"— applying class weights to reduce bias toward the majority.")
+
     model = build(args.seq_len, spec["dim"], len(labels))
     model.summary()
     es = EarlyStopping(monitor="val_loss", patience=30, restore_best_weights=True)
     model.fit(X, y, validation_split=args.val_split, epochs=args.epochs,
-              batch_size=args.batch_size, callbacks=[es], verbose=2)
+              batch_size=args.batch_size, callbacks=[es], verbose=2,
+              class_weight=class_weight)
 
     out.mkdir(parents=True, exist_ok=True)
     model.save(out / "model.keras")
