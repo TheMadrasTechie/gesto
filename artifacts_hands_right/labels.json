@@ -6,7 +6,8 @@
   ],
   "region_key": "hands_right",
   "input_dim": 63,
-  "seq_len": 30,
+  "seq_len": 20,
   "gesto_region": "Hands",
-  "hands": "one"
+  "hands": "one",
+  "normalized": true
 }

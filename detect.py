@@ -21,7 +21,7 @@ import cv2
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
-from gesto_regions import REGIONS, draw_region
+from gesto_regions import REGIONS, draw_region, normalize_vector
 
 
 def main():
@@ -31,6 +31,9 @@ def main():
     ap.add_argument("--threshold", type=float, default=0.5)
     ap.add_argument("--stable", type=int, default=10,
                     help="frames of agreement required before accepting (notebook uses 10)")
+    ap.add_argument("--raw", action="store_true",
+                    help="Use if your Gesto data was captured with 'Normalise' "
+                         "UNCHECKED. Default assumes normalized (Gesto's default).")
     args = ap.parse_args()
 
     art = Path(args.artifacts)
@@ -49,6 +52,10 @@ def main():
     cap = cv2.VideoCapture(src)
     if not cap.isOpened():
         raise SystemExit(f"Could not open source: {src}")
+    # Gesto Labeller MIRRORS the webcam when capturing (but not video files).
+    # We must mirror here too, or the model sees horizontally-flipped hands at
+    # detection vs training -> wrong predictions. Match Gesto exactly.
+    is_webcam = isinstance(src, int)
 
     sequence = []            # rolling list, exactly like the notebook
     predictions = deque(maxlen=args.stable)
@@ -77,12 +84,17 @@ def main():
         ok, frame = cap.read()
         if not ok:
             break
+        if is_webcam:
+            frame = cv2.flip(frame, 1)      # mirror, matching Gesto capture
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = holistic.process(rgb)
         draw_region(frame, results, region_key)
 
         keypoints = extract(results)
+        # match Gesto's capture: it normalizes by default, so normalize here too
+        if not args.raw:
+            keypoints = normalize_vector(keypoints, region_key)
         sequence.append(keypoints)
         sequence = sequence[-T:]            # keep last T frames (notebook style)
 

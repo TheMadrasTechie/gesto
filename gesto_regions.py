@@ -65,6 +65,51 @@ REGIONS = {
 }
 
 
+# ---- normalization (EXACT copy of Gesto Labeller's normalize_vector) --------
+# Gesto's "Normalise" checkbox defaults to ON, so captured .npy data is usually
+# translation/scale-normalized. Detection MUST apply the identical transform or
+# the model sees differently-scaled inputs than it trained on -> wrong results.
+
+def _normalize_one_hand(pts):
+    """pts: (21,3) -> wrist-relative, scale-normalised. Matches Gesto."""
+    if np.any(pts):
+        pts = pts - pts[0]
+        scale = np.linalg.norm(pts, axis=1).max()
+        if scale > 1e-6:
+            pts = pts / scale
+    return pts
+
+
+def normalize_vector(vec, region_key):
+    """Apply Gesto's normalization for the given region_key. Returns a new
+    vector the same shape as `vec`."""
+    vec = np.asarray(vec, np.float32)
+    if region_key == "hands_right":
+        return _normalize_one_hand(vec.reshape(21, 3).copy()).reshape(-1)
+    if region_key == "hands_two":
+        pts = vec.reshape(2, 21, 3).copy()
+        for h in range(2):
+            pts[h] = _normalize_one_hand(pts[h])
+        return pts.reshape(-1)
+    if region_key in ("pose", "legs"):
+        n = 33 if region_key == "pose" else len(LEG_POSE_IDX)
+        pts = vec.reshape(n, 4).copy()
+        xyz = pts[:, :3]
+        mask = np.any(xyz != 0, axis=1)
+        if np.any(mask):
+            xyz -= xyz[mask].mean(axis=0)
+            scale = np.linalg.norm(xyz, axis=1).max()
+            if scale > 1e-6:
+                xyz /= scale
+        pts[:, :3] = xyz
+        return pts.reshape(-1)
+    if region_key == "full":
+        pose = normalize_vector(vec[:132], "pose")
+        hands = normalize_vector(vec[132:], "hands_two")
+        return np.concatenate([pose, hands])
+    return vec
+
+
 # ---- drawing (BGR frame, in place) ----
 
 _HAND_BONES = [(0,1),(1,2),(2,3),(3,4),(0,5),(5,6),(6,7),(7,8),(5,9),(9,10),

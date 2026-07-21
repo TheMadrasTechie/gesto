@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Input
+from tensorflow.keras.layers import LSTM, Dense, Input, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 
 from gesto_regions import REGIONS
@@ -54,16 +54,35 @@ def load(project_dir, dim, seq_len):
     return np.array(X, np.float32), np.array(y), labels
 
 
-def build(seq_len, dim, n):
-    m = Sequential([
-        Input(shape=(seq_len, dim)),
-        LSTM(64, return_sequences=True, activation="relu"),
-        LSTM(128, return_sequences=True, activation="relu"),
-        LSTM(64, return_sequences=False, activation="relu"),
-        Dense(64, activation="relu"),
-        Dense(32, activation="relu"),
-        Dense(n, activation="softmax"),
-    ])
+def build(seq_len, dim, n, small=False):
+    """LSTM classifier.
+
+    small=True builds a much lighter network (single small LSTM + tanh, plus
+    dropout). The default 3-LSTM stack has hundreds of thousands of parameters
+    and OVERFITS / collapses on tiny datasets (a few dozen sequences). For small
+    data, the light model learns the actual differences instead of memorising or
+    collapsing to one class. It also uses tanh (cuDNN-friendly, more stable than
+    relu inside LSTMs).
+    """
+    if small:
+        m = Sequential([
+            Input(shape=(seq_len, dim)),
+            LSTM(32, return_sequences=False, activation="tanh"),
+            Dropout(0.4),
+            Dense(32, activation="relu"),
+            Dropout(0.3),
+            Dense(n, activation="softmax"),
+        ])
+    else:
+        m = Sequential([
+            Input(shape=(seq_len, dim)),
+            LSTM(64, return_sequences=True, activation="tanh"),
+            LSTM(128, return_sequences=True, activation="tanh"),
+            LSTM(64, return_sequences=False, activation="tanh"),
+            Dense(64, activation="relu"),
+            Dense(32, activation="relu"),
+            Dense(n, activation="softmax"),
+        ])
     m.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
               metrics=["accuracy"])
     return m
@@ -77,6 +96,11 @@ def main():
     ap.add_argument("--epochs", type=int, default=300)
     ap.add_argument("--batch_size", type=int, default=16)
     ap.add_argument("--val_split", type=float, default=0.15)
+    ap.add_argument("--small", action="store_true",
+                    help="Use a lighter model (recommended for < ~100 sequences)")
+    ap.add_argument("--raw", action="store_true",
+                    help="Set if data was captured with Gesto 'Normalise' "
+                         "UNCHECKED (records it so detection matches).")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -87,6 +111,14 @@ def main():
           f"classes={labels}")
     for name, c in zip(labels, np.bincount(y, minlength=len(labels))):
         print(f"   {name:12} {c}")
+
+    # auto-pick the light model for small datasets — the big 3-LSTM stack
+    # overfits/collapses on a few dozen sequences
+    use_small = args.small or len(X) < 100
+    if use_small and not args.small:
+        print(f"\nNOTE: only {len(X)} sequences — using the lighter model "
+              f"automatically (big LSTM stacks collapse on small data). "
+              f"Pass --small to force it, or capture more data for the full model.")
 
     rng = np.random.default_rng(42); idx = rng.permutation(len(X))
     X, y = X[idx], y[idx]
@@ -106,7 +138,7 @@ def main():
         print(f"NOTE: imbalanced classes {dict(zip(labels, counts.astype(int)))} "
               f"— applying class weights to reduce bias toward the majority.")
 
-    model = build(args.seq_len, spec["dim"], len(labels))
+    model = build(args.seq_len, spec["dim"], len(labels), small=use_small)
     model.summary()
     es = EarlyStopping(monitor="val_loss", patience=30, restore_best_weights=True)
     model.fit(X, y, validation_split=args.val_split, epochs=args.epochs,
@@ -119,6 +151,7 @@ def main():
         "labels": labels, "region_key": args.region, "input_dim": spec["dim"],
         "seq_len": args.seq_len,
         "gesto_region": spec["gesto_region"], "hands": spec["hands"],
+        "normalized": not args.raw,
     }, indent=2))
     print(f"\nSaved -> {out/'model.keras'} and {out/'labels.json'}")
 
