@@ -38,7 +38,17 @@ def _pose_legs(results):
     return np.array([[lm[i].x, lm[i].y, lm[i].z, lm[i].visibility]
                      for i in LEG_POSE_IDX]).flatten()
 
-def extract_hands_right(results): return _rh(results).astype(np.float32)
+def extract_hands_right(results):
+    """One-hand vector, matching Gesto's capture exactly: prefer the RIGHT
+    hand, fall back to the LEFT if right isn't present (Gesto's one-hand mode
+    uses `right_hand_landmarks or left_hand_landmarks`). Using right-only here
+    would zero-out frames the app actually stored as left -> train/detect
+    mismatch."""
+    hand = results.right_hand_landmarks or results.left_hand_landmarks
+    out = np.zeros(21 * 3, np.float32)
+    if hand:
+        out = np.array([[r.x, r.y, r.z] for r in hand.landmark]).flatten()
+    return out.astype(np.float32)
 def extract_hands_two(results):   return np.concatenate([_lh(results), _rh(results)]).astype(np.float32)
 def extract_pose(results):        return _pose_full(results).astype(np.float32)
 def extract_legs(results):        return _pose_legs(results).astype(np.float32)
@@ -80,11 +90,16 @@ def _dots(frame, pts, bones):
 
 def draw_region(frame, results, region_key):
     def hand_xy(h): return [(lm.x, lm.y) for lm in h.landmark] if h else []
-    if region_key in ("hands_right", "hands_two"):
-        if results.right_hand_landmarks:
-            _dots(frame, hand_xy(results.right_hand_landmarks), _HAND_BONES)
-        if region_key == "hands_two" and results.left_hand_landmarks:
-            _dots(frame, hand_xy(results.left_hand_landmarks), _HAND_BONES)
+    if region_key == "hands_right":
+        # one-hand: draw whichever hand is present (prefer right, else left) —
+        # matches the extractor above
+        hand = results.right_hand_landmarks or results.left_hand_landmarks
+        if hand:
+            _dots(frame, hand_xy(hand), _HAND_BONES)
+    elif region_key == "hands_two":
+        for h in (results.left_hand_landmarks, results.right_hand_landmarks):
+            if h:
+                _dots(frame, hand_xy(h), _HAND_BONES)
     elif region_key == "pose" and results.pose_landmarks:
         _dots(frame, [(lm.x, lm.y) for lm in results.pose_landmarks.landmark], _POSE_BONES)
     elif region_key == "legs" and results.pose_landmarks:
