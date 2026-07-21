@@ -52,7 +52,26 @@ def main():
 
     sequence = []            # rolling list, exactly like the notebook
     predictions = deque(maxlen=args.stable)
-    current = "—"
+    current = "—"            # committed label (after stability check)
+    # a distinct colour per class for the probability bars
+    rng = np.random.RandomState(7)
+    colors = [(int(rng.randint(60, 256)), int(rng.randint(60, 256)),
+               int(rng.randint(60, 256))) for _ in labels]
+
+    def draw_prob_bars(frame, probs):
+        """Draw one horizontal bar per class with its live percentage."""
+        for i, p in enumerate(probs):
+            y = 60 + i * 34
+            # bar background
+            cv2.rectangle(frame, (10, y), (10 + 260, y + 26), (50, 50, 50), -1)
+            # bar fill proportional to probability
+            cv2.rectangle(frame, (10, y), (10 + int(260 * float(p)), y + 26),
+                          colors[i], -1)
+            cv2.putText(frame, f"{labels[i]}  {float(p) * 100:4.1f}%",
+                        (16, y + 19), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                        (255, 255, 255), 1, cv2.LINE_AA)
+
+    probs = np.zeros(len(labels), np.float32)   # last prediction, shown live
 
     while cap.isOpened():
         ok, frame = cap.read()
@@ -67,20 +86,24 @@ def main():
         sequence.append(keypoints)
         sequence = sequence[-T:]            # keep last T frames (notebook style)
 
-        prob = 0.0
+        # keep predicting every frame the window is full, so the bars are live
         if len(sequence) == T:
-            res = model.predict(np.expand_dims(sequence, axis=0), verbose=0)[0]
-            top = int(np.argmax(res)); prob = float(res[top])
+            probs = model.predict(np.expand_dims(sequence, axis=0), verbose=0)[0]
+            top = int(np.argmax(probs))
             predictions.append(top)
-            # accept only if the last `stable` predictions all agree (notebook logic)
+            # the "committed" label still uses the stability check (steady output)
             if (len(predictions) == predictions.maxlen
                     and len(set(predictions)) == 1
-                    and prob > args.threshold):
+                    and float(probs[top]) > args.threshold):
                 current = labels[top]
 
-        cv2.rectangle(frame, (0, 0), (frame.shape[1], 40), (245, 117, 16), -1)
-        cv2.putText(frame, f"{current}   {prob:.2f}   [{len(sequence)}/{T}]",
-                    (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        # header: the committed label + window fill
+        cv2.rectangle(frame, (0, 0), (frame.shape[1], 46), (245, 117, 16), -1)
+        cv2.putText(frame, f"{current}    [{len(sequence)}/{T}]",
+                    (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+        # live probability bars for ALL classes
+        draw_prob_bars(frame, probs)
+
         cv2.imshow("Gesto — LSTM detection", frame)
         if cv2.waitKey(10) & 0xFF == ord("q"):
             break
