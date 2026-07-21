@@ -32,11 +32,11 @@ MODEL_PATH = "gesto_model.h5"
 LABELS_PATH = "labels.json"
 SEQUENCE_LENGTH = 30
 FEATURE_DIM = 63
-THRESHOLD = 0.7   # only show a prediction above this confidence
+THRESHOLD = 0.3   # only show a prediction above this confidence
 
 # Optional: map your collected numbers to display names here.
 # e.g. {"0": "A", "1": "B"} — leave empty to show the raw labels.
-DISPLAY_NAMES = {"0": "Thumbs Up", "1": "all fingers shown", "2" : "BaBa sign"} 
+DISPLAY_NAMES = {"0": "Box", "1": "Thumbs Up", "2" : "BaBa sign", "3": "Hi"} 
 
 
 def extract_keypoints(results):
