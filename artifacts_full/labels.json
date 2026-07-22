@@ -1,0 +1,13 @@
+{
+  "labels": [
+    "hand-clapping",
+    "hand-waving",
+    "walking"
+  ],
+  "region_key": "full",
+  "input_dim": 258,
+  "seq_len": 30,
+  "gesto_region": "Full",
+  "hands": "two",
+  "normalized": true
+}
