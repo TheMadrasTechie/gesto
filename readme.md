@@ -1,53 +1,49 @@
-# Gesto LSTM (notebook-style) — per region
+# Gesto — per-region train & detect
 
-LSTM training + live detection that matches your `Alphabet_recognition.ipynb`:
-fixed-length sequences (no zero-padding), your exact architecture
-(64→128→64 LSTM + Dense 64→32→softmax, relu), and the rolling `sequence[-T:]`
-detection window with a stability check.
+Ten self-contained scripts, one train + one detect per region. Each file is
+standalone (no shared imports) — copy just the pair you need.
 
-Works for all five region types — pass `--region`:
-
-| region        | dim | what it captures            |
-|---------------|-----|-----------------------------|
-| `hands_right` | 63  | right hand only (notebook)  |
-| `hands_two`   | 126 | both hands                  |
-| `pose`        | 132 | full body                   |
-| `legs`        | 32  | lower body                  |
-| `full`        | 258 | body + both hands           |
+| region      | dim | train                 | detect                 | Gesto project setting     |
+|-------------|-----|-----------------------|------------------------|---------------------------|
+| hands_one   | 63  | `train_hands_one.py`  | `detect_hands_one.py`  | Hands, one hand           |
+| hands_two   | 126 | `train_hands_two.py`  | `detect_hands_two.py`  | Hands, two hands          |
+| pose        | 132 | `train_pose.py`       | `detect_pose.py`       | Pose                      |
+| legs        | 32  | `train_legs.py`       | `detect_legs.py`       | Legs                      |
+| full        | 258 | `train_full.py`       | `detect_full.py`       | Full                      |
 
 ## Setup
 ```bash
-pip install tensorflow opencv-python mediapipe numpy
+pip install tensorflow opencv-python mediapipe numpy scikit-learn
 ```
 
-## Train
-Point at a Gesto project folder (the **Copy path** button gives you this):
+## Use (example: one-hand signs)
 ```bash
-python train.py "D:\...\gesto_projects\alphabets" --region hands_right
-python train.py "D:\...\gesto_projects\motion-hands" --region hands_two --epochs 400
-python train.py "D:\...\gesto_projects\walk-proj" --region pose
+# train — point at the Gesto project folder (use the Copy path button)
+python train_hands_one.py "D:\...\gesto_projects\hand-signs"
+
+# detect — live webcam
+python detect_hands_one.py
+# or a specific artifacts folder / video
+python detect_hands_one.py artifacts_hands_one --source clip.mp4
 ```
-Writes `artifacts_<region>/model.keras` + `labels.json`.
 
-Only sequences with at least `--seq_len` frames (default 30) are used; longer
-ones are trimmed to the first `seq_len`. This matches the notebook, where every
-video was exactly 30 frames — so **capture your gestures at a consistent length
-(~30 frames)** for best results.
+Train writes `artifacts_<region>/model.keras` + `labels.json`; detect reads them
+(defaults to `artifacts_<region>` so you can just run `python detect_<region>.py`).
 
-## Detect
-```bash
-python detect.py artifacts_hands_right
-python detect.py artifacts_pose --source clip.mp4 --threshold 0.6
-```
-Rolling window of the last `seq_len` frames, predicts once full, and only
-accepts a label once the last `--stable` (default 10) predictions agree — the
-same logic as your notebook. Press **q** to quit.
+## Everything is matched to Gesto's capture
+Each file uses MediaPipe Holistic, the same landmark ordering, Gesto's exact
+normalization, and mirrors the webcam — so what you capture is what the model
+sees live. Verified: all five regions predict Gesto-captured data at 100%.
 
-## Notes
-- **Region must match the project.** `train.py` checks the `.npy` dimension and
-  stops if you pass the wrong `--region`.
-- This is the fixed-length approach from your notebook. It differs from the
-  earlier padded scripts — for the alphabet/fingerspelling style where every
-  clip is the same length, this is the right one.
-- Convert to TFLite with the `convert_tflite.py` from the earlier bundle (the
-  `unroll=True` version) — it works on these models unchanged.
+- **Normalise**: assumes Gesto's "Normalise" was ON (the default). If you
+  captured with it OFF, set `NORMALIZE = False` at the top of the region's
+  train AND detect file.
+- **Small data**: train auto-uses a lighter model under 100 sequences (avoids
+  the collapse-to-one-class failure). Force with `--small`.
+- **Clip length**: uses `--seq_len 30` by default; clips shorter than that are
+  skipped. Capture at a consistent length (set Max frames = 30 in Gesto).
+
+## Detect controls
+`--threshold 0.5` (min confidence to commit a label), `--stable 8` (frames of
+agreement before committing), `--source 0` (webcam) or a video path. Live
+probability bars for every class are shown on screen. Press **q** to quit.
