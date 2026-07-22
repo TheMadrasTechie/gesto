@@ -167,6 +167,15 @@ def main():
     cap = cv2.VideoCapture(src)
     if not cap.isOpened():
         sys.exit(f"Could not open source: {src}")
+    # pace video playback to its real frame rate; webcam stays snappy at ~1ms
+    if is_webcam:
+        wait_ms = 1
+    else:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        wait_ms = int(1000 / fps) if fps and fps > 1 else 33   # default ~30fps
+    win = "Gesto full detect (q=quit)"
+    DISPLAY_W = 960          # frames are scaled to this width for display
+    cv2.namedWindow(win, cv2.WINDOW_AUTOSIZE)
 
     rng = np.random.RandomState(7)
     colors = [(int(rng.randint(60,256)), int(rng.randint(60,256)), int(rng.randint(60,256)))
@@ -174,14 +183,22 @@ def main():
     sequence = []; preds = deque(maxlen=args.stable); current = "-"
     probs = np.zeros(len(labels), np.float32)
 
+    quit_pressed = False
+    frame = None
     while cap.isOpened():
         ok, frame = cap.read()
         if not ok:
-            break
+            break                       # end of video / stream
         if is_webcam:
             frame = cv2.flip(frame, 1)          # mirror, matching Gesto capture
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB); rgb.flags.writeable = False
         res = holistic.process(rgb)
+
+        # scale the frame to a consistent display width so the WHOLE frame is
+        # visible (large source videos were opening zoomed-in / cropped)
+        h0, w0 = frame.shape[:2]
+        if w0 != DISPLAY_W:
+            frame = cv2.resize(frame, (DISPLAY_W, int(h0 * DISPLAY_W / w0)))
         draw(frame, res)
 
         kp = extract(res)
@@ -206,9 +223,19 @@ def main():
             cv2.putText(frame, f"{labels[i]}  {float(p)*100:4.1f}%", (16, yb + 19),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
-        cv2.imshow("Gesto full detect (q=quit)", frame)
-        if cv2.waitKey(10) & 0xFF == ord("q"):
+        cv2.imshow(win, frame)
+        if cv2.waitKey(wait_ms) & 0xFF == ord("q"):
+            quit_pressed = True
             break
+
+    # if the video finished on its own (not a manual quit), hold the last frame
+    # so the final result stays on screen until you press a key
+    if not is_webcam and not quit_pressed and frame is not None:
+        cv2.putText(frame, "video ended - press any key", (10, frame.shape[0] - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        cv2.imshow(win, frame)
+        cv2.waitKey(0)
+
     cap.release(); cv2.destroyAllWindows(); holistic.close()
 
 
