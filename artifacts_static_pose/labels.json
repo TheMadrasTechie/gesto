@@ -1,0 +1,13 @@
+{
+  "labels": [
+    "clap",
+    "walk",
+    "wave"
+  ],
+  "region_key": "pose",
+  "input_dim": 132,
+  "mode": "static",
+  "gesto_region": "Pose",
+  "hands": "two",
+  "normalized": true
+}
