@@ -1,0 +1,13 @@
+{
+  "labels": [
+    "Baba",
+    "Hi",
+    "thumbs up"
+  ],
+  "region_key": "hands_one",
+  "input_dim": 63,
+  "mode": "static",
+  "gesto_region": "Hands",
+  "hands": "one",
+  "normalized": true
+}
