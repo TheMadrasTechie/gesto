@@ -1,0 +1,15 @@
+{
+  "labels": [
+    "baba",
+    "boxing",
+    "dance",
+    "hi",
+    "thumbs up"
+  ],
+  "region_key": "hands_two",
+  "input_dim": 126,
+  "mode": "static",
+  "gesto_region": "Hands",
+  "hands": "two",
+  "normalized": true
+}
