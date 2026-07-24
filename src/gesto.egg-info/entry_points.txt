@@ -1,0 +1,2 @@
+[console_scripts]
+gesto = gesto.cli:main

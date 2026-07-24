@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gesto"
+version = "0.1.0"
+description = "Train and run gesture recognition models from Gesto Labeller datasets"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Sundar Balamurugan" }]
+keywords = [
+    "gesture-recognition",
+    "mediapipe",
+    "pose-estimation",
+    "computer-vision",
+    "lstm",
+    "sign-language",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "numpy>=1.23",
+    "tensorflow>=2.15",
+    "opencv-python>=4.8",
+    "mediapipe>=0.10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/TheMadrasTechie/gesto"
+Issues = "https://github.com/TheMadrasTechie/gesto/issues"
+
+[project.scripts]
+gesto = "gesto.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

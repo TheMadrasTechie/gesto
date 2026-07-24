@@ -1,3 +1,36 @@
+Metadata-Version: 2.4
+Name: gesto
+Version: 0.1.0
+Summary: Train and run gesture recognition models from Gesto Labeller datasets
+Author: Sundar Balamurugan
+License: MIT
+Project-URL: Homepage, https://github.com/TheMadrasTechie/gesto
+Project-URL: Issues, https://github.com/TheMadrasTechie/gesto/issues
+Keywords: gesture-recognition,mediapipe,pose-estimation,computer-vision,lstm,sign-language
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Image Recognition
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.23
+Requires-Dist: tensorflow>=2.15
+Requires-Dist: opencv-python>=4.8
+Requires-Dist: mediapipe>=0.10
+Provides-Extra: dev
+Requires-Dist: pytest>=7; extra == "dev"
+Requires-Dist: build; extra == "dev"
+Requires-Dist: twine; extra == "dev"
+Dynamic: license-file
+
 # gesto
 
 Train and run gesture recognition models from [Gesto Labeller](https://github.com/TheMadrasTechie) datasets.
