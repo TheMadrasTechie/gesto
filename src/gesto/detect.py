@@ -27,10 +27,11 @@ class Predictor:
     """A trained model plus everything needed to feed it correctly."""
 
     def __init__(self, run: str | Path):
-        from tensorflow import keras
+        from ._compat import keras
+        k = keras()
         self.run = Path(run)
         self.meta = artifacts.load_meta(self.run)
-        self.model = keras.models.load_model(artifacts.model_path(self.run))
+        self.model = k.models.load_model(artifacts.model_path(self.run))
         self.labels: list[str] = self.meta["labels"]
         self.region: str = self.meta["region"]
         self.mode: str = self.meta["mode"]

@@ -117,10 +117,51 @@ so detection knows to skip it.
 
 Run `gesto inspect <project>` to check all of this before training.
 
-## Requirements
+## Installation
 
-Python 3.9+, TensorFlow, OpenCV, MediaPipe, NumPy — all installed with the
-package.
+```bash
+pip install gesto
+```
+
+`gesto` uses MediaPipe's legacy `solutions` API, which was removed in MediaPipe
+0.10.31. It also needs versions of TensorFlow, NumPy and protobuf that agree
+with that MediaPipe — newer TensorFlow (2.21+) and OpenCV (5.0) pull protobuf
+and NumPy in an incompatible direction. The package therefore pins a coherent,
+tested set:
+
+| package | pinned range | tested with |
+|---|---|---|
+| mediapipe | `>=0.10,<0.10.30` | 0.10.21 |
+| tensorflow | `>=2.15,<2.18` | 2.17.1 |
+| numpy | `>=1.23,<2` | 1.26.4 |
+| protobuf | `>=3.20,<5` | 4.25.9 |
+| opencv-python | `>=4.8,<4.12` | 4.11.0 |
+
+Install into a **fresh virtual environment** so these don't clash with other
+projects:
+
+```bash
+python -m venv gesto_env
+# Windows:  gesto_env\Scripts\activate
+# macOS/Linux:  source gesto_env/bin/activate
+pip install gesto
+```
+
+If you already hit dependency conflicts (e.g. you had TensorFlow 2.21 or
+OpenCV 5.0 installed), the cleanest fix is a fresh venv as above. To repair an
+existing environment, pin the set explicitly:
+
+```bash
+pip install "mediapipe==0.10.21" "tensorflow==2.17.1" "numpy==1.26.4" "protobuf==4.25.9" "opencv-python==4.11.0.86"
+```
+
+## Roadmap
+
+The legacy MediaPipe `solutions` API won't be maintained forever. A future
+release will move to MediaPipe's newer **Tasks** API (`HandLandmarker`,
+`PoseLandmarker`), which lifts the version ceiling. That API produces slightly
+different hand-landmark geometry, so models would need retraining — hence it's a
+deliberate, separate step rather than a drop-in change.
 
 ## License
 

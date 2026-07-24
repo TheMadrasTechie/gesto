@@ -3,6 +3,7 @@ MANIFEST.in
 README.md
 pyproject.toml
 src/gesto/__init__.py
+src/gesto/_compat.py
 src/gesto/artifacts.py
 src/gesto/cli.py
 src/gesto/data.py

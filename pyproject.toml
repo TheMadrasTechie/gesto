@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gesto"
-version = "0.1.0"
+version = "0.1.1"
 description = "Train and run gesture recognition models from Gesto Labeller datasets"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -32,10 +32,16 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Recognition",
 ]
 dependencies = [
-    "numpy>=1.23",
-    "tensorflow>=2.15",
-    "opencv-python>=4.8",
-    "mediapipe>=0.10",
+    # These are pinned to a mutually-compatible era. MediaPipe 0.10.x needs the
+    # legacy solutions API (dropped in 0.10.31) plus protobuf 4.x and numpy 1.x;
+    # newer TensorFlow (2.21+) wants protobuf 6.31+ and OpenCV 5.0 wants numpy 2.
+    # Those conflict, so we hold TF, OpenCV and numpy at versions that agree
+    # with MediaPipe 0.10.21. See README "Installation" if you need a newer TF.
+    "numpy>=1.23,<2",
+    "protobuf>=3.20,<5",
+    "tensorflow>=2.15,<2.18",
+    "opencv-python>=4.8,<4.12",
+    "mediapipe>=0.10,<0.10.30",
 ]
 
 [project.optional-dependencies]

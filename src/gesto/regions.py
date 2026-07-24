@@ -209,8 +209,25 @@ def draw(frame, res, region: str) -> None:
 
 
 def make_holistic():
-    """MediaPipe Holistic with the same settings Gesto Labeller captures with."""
-    import mediapipe as mp
-    return mp.solutions.holistic.Holistic(
+    """MediaPipe Holistic with the same settings Gesto Labeller captures with.
+
+    This package uses MediaPipe's legacy ``solutions`` API. MediaPipe 0.10.31+
+    removed it, so ``mp.solutions.holistic`` raises ``AttributeError: module
+    'mediapipe' has no attribute 'solutions'`` on those versions. Install a
+    version that still ships it (the package pins ``mediapipe<0.10.30``).
+    """
+    try:
+        import mediapipe as mp
+        holistic = mp.solutions.holistic
+    except AttributeError as exc:
+        import mediapipe as mp
+        raise ImportError(
+            f"Your mediapipe {getattr(mp, '__version__', '?')} doesn't include "
+            f"the legacy solutions API this package needs (removed in 0.10.31). "
+            f"Install a compatible version:\n"
+            f'    pip install "mediapipe>=0.10,<0.10.30"\n'
+            f"(0.10.21 is known good.)"
+        ) from exc
+    return holistic.Holistic(
         static_image_mode=False, model_complexity=1,
         min_detection_confidence=0.6, min_tracking_confidence=0.5)

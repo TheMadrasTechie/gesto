@@ -1,7 +1,8 @@
-numpy>=1.23
-tensorflow>=2.15
-opencv-python>=4.8
-mediapipe>=0.10
+numpy<2,>=1.23
+protobuf<5,>=3.20
+tensorflow<2.18,>=2.15
+opencv-python<4.12,>=4.8
+mediapipe<0.10.30,>=0.10
 
 [dev]
 pytest>=7

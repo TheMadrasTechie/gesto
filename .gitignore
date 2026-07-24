@@ -5,3 +5,4 @@ spellsync_env/
 videos/
 old_codes/
 dist/
+.pytest_cache/

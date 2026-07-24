@@ -27,9 +27,9 @@ SMALL_SEQUENCE = 100
 
 
 def _keras():
-    """Imported lazily so `import gesto` stays cheap and TF is optional."""
-    from tensorflow import keras
-    return keras
+    """A working Keras module, robust to how the environment exposes it."""
+    from ._compat import keras
+    return keras()
 
 
 def _class_weights(y, n_classes) -> dict[int, float]:
