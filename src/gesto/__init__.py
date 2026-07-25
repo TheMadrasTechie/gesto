@@ -26,7 +26,7 @@ overwrites an old one (pose, pose_2, pose_3, ...).
 
 from __future__ import annotations
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 
 from .regions import REGION_KEYS, REGION_INFO, feature_dim, extract, normalize
 

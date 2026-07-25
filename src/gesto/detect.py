@@ -104,10 +104,67 @@ def _overlay(frame, labels, probs, current, colors, progress=None) -> None:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, WHITE, 1, cv2.LINE_AA)
 
 
+def predict_image(mode: str, region: str, image_path: str, *,
+                  root: str | Path = artifacts.DEFAULT_ROOT,
+                  version: int | str | None = None, draw_landmarks: bool = True,
+                  show: bool = True, width: int = 960):
+    """Classify a single still image (static models only).
+
+    Returns (label, confidence, probabilities). With show=True it also opens a
+    window with the result until a key is pressed.
+    """
+    import cv2
+
+    predictor = Predictor.load(mode, region, root=root, version=version)
+    if predictor.mode != "static":
+        raise ValueError("Single-image prediction needs a static model; "
+                         f"{mode}/{region} is {predictor.mode}.")
+
+    frame = cv2.imread(str(image_path))
+    if frame is None:
+        raise SystemExit(f"Could not read image: {image_path}")
+
+    holistic = make_holistic()
+    try:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb.flags.writeable = False
+        res = holistic.process(rgb)
+    finally:
+        holistic.close()
+
+    vec = predictor.features(res)
+    if vec is None:
+        print("No landmarks detected in the image.")
+        label, conf, probs = None, 0.0, np.zeros(len(predictor.labels), np.float32)
+    else:
+        probs = predictor.predict(vec)
+        top = int(np.argmax(probs))
+        label, conf = predictor.labels[top], float(probs[top])
+        print(f"{label}   {conf * 100:.1f}%")
+        for name, p in zip(predictor.labels, probs):
+            print(f"   {name:16} {float(p) * 100:5.1f}%")
+
+    if show:
+        h0, w0 = frame.shape[:2]
+        if w0 != width:
+            frame = cv2.resize(frame, (width, int(h0 * width / w0)))
+        if draw_landmarks:
+            draw(frame, res, predictor.region)
+        colors = _palette(len(predictor.labels))
+        _overlay(frame, predictor.labels, probs, label or "-", colors)
+        win = f"gesto {mode}/{region} (any key to close)"
+        cv2.namedWindow(win, cv2.WINDOW_AUTOSIZE)
+        cv2.imshow(win, frame)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return label, conf, probs
+
+
 def run(mode: str, region: str, *, root: str | Path = artifacts.DEFAULT_ROOT,
         version: int | str | None = None, source: str = "0",
         threshold: float = 0.5, smooth: int = 5, width: int = 960,
-        mirror: bool | None = None) -> None:
+        mirror: bool | None = None, draw_landmarks: bool = True) -> None:
     """Open a camera or video and show live predictions."""
     import cv2
 
@@ -157,7 +214,8 @@ def run(mode: str, region: str, *, root: str | Path = artifacts.DEFAULT_ROOT,
             h0, w0 = frame.shape[:2]
             if w0 != width:
                 frame = cv2.resize(frame, (width, int(h0 * width / w0)))
-            draw(frame, res, predictor.region)
+            if draw_landmarks:
+                draw(frame, res, predictor.region)
 
             vec = predictor.features(res)
             out = predictor.predict(vec)

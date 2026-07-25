@@ -36,22 +36,62 @@ dimension and tells you if it doesn't.
 
 ## Command line
 
+Two equivalent styles. Use whichever you like.
+
+**General** — mode and region as arguments:
+
 ```bash
-# what's in this dataset?
-gesto inspect ./gesto_projects/signs
-
-# train
 gesto train static hands_one ./gesto_projects/signs
-gesto train sequence pose ./gesto_projects/jogging --seq-len 30
-
-# detect (newest model by default)
-gesto detect static hands_one
 gesto detect sequence pose --source clip.mp4
-gesto detect static hands_one --version 2
-
-# what have I trained?
-gesto list
+gesto image hands_one photo.jpg
 ```
+
+**Per-combination** — one command per mode+region (there's one for each):
+
+```bash
+gesto train-static-legs ./gesto_projects/stances --epochs 250
+gesto detect-sequence-pose --source clip.mp4
+gesto image-static-hands-one photo.jpg
+```
+
+### Detecting on camera vs video
+
+`--source` takes a webcam index or a file path:
+
+```bash
+gesto detect static hands_one                       # default webcam (index 0)
+gesto detect static hands_one --source 1            # second camera
+gesto detect sequence pose --source walk.mp4        # a video file
+gesto detect sequence pose --source C:\clips\run.avi
+```
+
+### Classifying a single image (static models)
+
+```bash
+gesto image hands_one photo.jpg                     # opens a window with the result
+gesto image hands_one photo.jpg --no-show           # just print the prediction
+gesto image-static-pose posture.png --version 2     # a specific model version
+```
+
+### Drawing landmarks
+
+Landmarks are drawn on the frame by default. Turn them off with `--no-draw`:
+
+```bash
+gesto detect static hands_one                        # skeleton drawn (default)
+gesto detect static hands_one --no-draw              # clean video, no skeleton
+gesto image hands_one photo.jpg --no-draw
+```
+
+### Training options
+
+Epochs and other hyperparameters are adjustable on any train command:
+
+```bash
+gesto train sequence pose ./proj --epochs 400 --batch-size 32 --seq-len 30
+gesto train-static-hands-one ./proj --epochs 150 --large   # force full model
+```
+
 
 ## Python
 
@@ -59,7 +99,13 @@ gesto list
 import gesto
 
 run = gesto.train("./gesto_projects/signs", region="hands_one", mode="static")
-gesto.detect("static", "hands_one")
+gesto.detect("static", "hands_one")                       # camera
+gesto.detect("sequence", "pose", source="clip.mp4")       # video
+
+# classify a single image with a static model
+from gesto.detect import predict_image
+label, confidence, probs = predict_image("static", "hands_one", "photo.jpg",
+                                         show=False, draw_landmarks=False)
 ```
 
 Or drive a model yourself:

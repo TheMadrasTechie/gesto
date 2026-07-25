@@ -4,3 +4,20 @@ python gesto_labeller_detect.py --model gesto_model.h5 --labels labels.json
 
 
 python convert_tflite.py --model gesto_model.h5 --labels labels.json --out gesto_hlm.tflite
+
+python -m build
+python -m twine upload dist/*
+
+
+
+
+deactivate
+rmdir /s gesto_env
+python -m venv gesto_env
+gesto_env\Scripts\activate
+pip list
+
+pip install "mediapipe==0.10.21" "tensorflow==2.17.1" "numpy==1.26.4" "protobuf==4.25.9" "opencv-python==4.11.0.86"
+pip install gesto
+
+pip show gesto
