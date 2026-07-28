@@ -1,4 +1,4 @@
-name: Publish to GESTO PyPI (on N-N-N commit message)
+name: Publish to PyPI (on N-N-N commit message)
 
 # Triggers on push to main/master. The package is only built and published
 # when the latest commit message STARTS WITH a version like "1-2-3", which
@@ -86,11 +86,73 @@ jobs:
           sed -i -E "0,/^version = \"[^\"]*\"/s//version = \"$VERSION\"/" pyproject.toml
           grep -m1 "version = " pyproject.toml
 
+      - name: Ensure README.md exists (handles readme.md, Readme.md, etc.)
+        run: |
+          # CI runs on case-sensitive Linux. If pyproject.toml says README.md but
+          # the committed file is readme.md / Readme.md, the long_description is
+          # dropped. This guarantees a README.md exists with the right case.
+          if [ ! -f "README.md" ]; then
+            ALT=$(find . -maxdepth 1 -iname "readme.md" ! -name "README.md" | head -1)
+            if [ -n "$ALT" ]; then
+              cp "$ALT" README.md
+              echo "Copied $ALT -> README.md (case/name mismatch fixed)"
+            else
+              echo "!! No README file found in repo root — long_description will be empty."
+              ls -la
+              exit 1
+            fi
+          else
+            echo "OK: README.md present with correct case."
+          fi
+
       - name: Clean old build artifacts
         run: rm -rf dist/ build/ src/*.egg-info/ *.egg-info/
 
+      - name: Diagnose packaging config (why long_description could be missing)
+        run: |
+          echo "===== repo root ====="
+          ls -la
+          echo ""
+          echo "===== README present? ====="
+          ls -la README.md 2>/dev/null || echo "!! README.md NOT in repo root"
+          echo ""
+          echo "===== conflicting setup files? (these override pyproject.toml) ====="
+          if [ -f setup.py ]; then
+            echo "!! setup.py EXISTS — this overrides pyproject.toml and is likely why long_description is missing."
+            echo "--- setup.py contents ---"; cat setup.py
+          else
+            echo "OK: no setup.py"
+          fi
+          if [ -f setup.cfg ]; then
+            echo "!! setup.cfg EXISTS"; echo "--- setup.cfg ---"; cat setup.cfg
+          else
+            echo "OK: no setup.cfg"
+          fi
+          echo ""
+          echo "===== does pyproject.toml declare the readme? ====="
+          grep -n "readme" pyproject.toml || echo "!! no 'readme =' line in pyproject.toml"
+
       - name: Build package
         run: python -m build
+
+      - name: Verify long_description is in the build BEFORE publishing
+        run: |
+          python - <<'PY'
+          import glob, tarfile, sys
+          sd = glob.glob('dist/*.tar.gz')[0]
+          with tarfile.open(sd) as t:
+              pkg = [m for m in t.getmembers() if m.name.endswith('PKG-INFO')][0]
+              c = t.extractfile(pkg).read().decode()
+          has_type = 'Description-Content-Type:' in c
+          body = c.split('\n\n', 1)[1].strip() if '\n\n' in c else ''
+          print("Description-Content-Type header:", has_type)
+          print("Description body length:", len(body))
+          if not has_type or len(body) < 50:
+              print("\nERROR: the README did not get attached as long_description.")
+              print("Most common cause: a setup.py in the repo overriding pyproject.toml.")
+              sys.exit(1)
+          print("OK: long_description is present.")
+          PY
 
       - name: Verify README + version in built metadata
         run: |
