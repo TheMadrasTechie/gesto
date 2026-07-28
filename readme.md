@@ -1,14 +1,33 @@
-# gesto
+<p align="center">
+  <img src="https://raw.githubusercontent.com/TheMadrasTechie/gesto/master/assets/gesto.svg" alt="Gesto logo" width="120" height="120"/>
+</p>
 
-Train and run gesture recognition models from [Gesto Labeller](https://github.com/TheMadrasTechie) datasets.
+<h1 align="center">gesto</h1>
+
+<p align="center">
+  Train and run gesture recognition models from Gesto Labeller datasets.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/pypi/v/gesto" alt="PyPI version"/>
+  <img src="https://img.shields.io/pypi/pyversions/gesto" alt="Python versions"/>
+  <img src="https://img.shields.io/github/license/TheMadrasTechie/gesto" alt="License"/>
+  <img src="https://img.shields.io/pypi/dm/gesto" alt="Downloads"/>
+</p>
+
+<p align="center">
+  <a href="https://gestostudio.com">Website</a> ·
+  <a href="https://gestostudio.com/docs.html">Docs</a> ·
+  <a href="https://github.com/TheMadrasTechie/gesto">GitHub</a>
+</p>
+
+<p align="center">
+  <code>pip install gesto</code>
+</p>
 
 Point it at a project folder, pick a mode and a region, and it handles the rest —
 loading, training, versioned model storage, and live detection that matches how
 the data was captured.
-
-```bash
-pip install gesto
-```
 
 ## Two modes
 
