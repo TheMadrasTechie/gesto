@@ -105,11 +105,16 @@ jobs:
               print(content[:800])
           PY
 
-      - name: Check distribution renders on PyPI
-        run: python -m twine check dist/*
+      - name: Check distribution renders on PyPI (hard gate)
+        run: |
+          # Fails the job if the long-description/README is missing or malformed,
+          # so a bad build never reaches PyPI as "no description".
+          python -m twine check --strict dist/*
 
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: "__token__"
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: python -m twine upload --non-interactive dist/*
+        # --skip-existing: if this exact version was already uploaded, don't hard-fail
+        # (you should still bump the version each release via the commit message).
+        run: python -m twine upload --non-interactive --skip-existing dist/*
