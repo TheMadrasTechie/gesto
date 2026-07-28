@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gesto"
-version = "0.2.0"
+version = "0.2.1"
 description = "Train and run gesture recognition models from Gesto Labeller datasets"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -48,7 +48,9 @@ dependencies = [
 dev = ["pytest>=7", "build", "twine"]
 
 [project.urls]
-Homepage = "https://github.com/TheMadrasTechie/gesto"
+Homepage = "https://gestostudio.com"
+Documentation = "https://gestostudio.com/docs.html"
+Repository = "https://github.com/TheMadrasTechie/gesto"
 Issues = "https://github.com/TheMadrasTechie/gesto/issues"
 
 [project.scripts]
