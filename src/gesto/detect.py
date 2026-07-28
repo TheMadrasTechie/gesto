@@ -87,7 +87,8 @@ def _palette(n: int) -> list[tuple[int, int, int]]:
              int(rng.randint(60, 256))) for _ in range(n)]
 
 
-def _overlay(frame, labels, probs, current, colors, progress=None) -> None:
+def _overlay(frame, labels, probs, current, colors, progress=None,
+             top_k=5) -> None:
     import cv2
     cv2.rectangle(frame, (0, 0), (frame.shape[1], 46), HEADER_BG, -1)
     text = current
@@ -95,12 +96,15 @@ def _overlay(frame, labels, probs, current, colors, progress=None) -> None:
         text += f"   [{progress[0]}/{progress[1]}]"
     cv2.putText(frame, text, (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, WHITE, 2,
                 cv2.LINE_AA)
-    for i, p in enumerate(probs):
-        y = 60 + i * 34
+    # show only the top_k classes by confidence, closest match on top
+    order = np.argsort(probs)[::-1][:top_k]
+    for row, i in enumerate(order):
+        p = float(probs[i])
+        y = 60 + row * 34
         cv2.rectangle(frame, (10, y), (270, y + 26), (50, 50, 50), -1)
-        cv2.rectangle(frame, (10, y), (10 + int(260 * float(p)), y + 26),
+        cv2.rectangle(frame, (10, y), (10 + int(260 * p), y + 26),
                       colors[i], -1)
-        cv2.putText(frame, f"{labels[i]}  {float(p) * 100:4.1f}%", (16, y + 19),
+        cv2.putText(frame, f"{labels[i]}  {p * 100:4.1f}%", (16, y + 19),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, WHITE, 1, cv2.LINE_AA)
 
 
