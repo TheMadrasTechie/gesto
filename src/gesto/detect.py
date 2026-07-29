@@ -44,6 +44,11 @@ class Predictor:
     def load(cls, mode: str, region: str, *,
              root: str | Path = artifacts.DEFAULT_ROOT,
              version: int | str | None = None) -> "Predictor":
+        # version="default" downloads and uses a hosted demo model, so people
+        # can try detection without training anything first.
+        if isinstance(version, str) and version.lower() == "default":
+            from .pretrained import ensure_pretrained
+            return cls(ensure_pretrained(mode, region))
         return cls(artifacts.resolve(root, mode, region, version))
 
     def features(self, res) -> np.ndarray | None:

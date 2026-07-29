@@ -61,7 +61,11 @@ def _add_train_args(p):
 def _add_detect_args(p):
     p.add_argument("--source", default="0", help="webcam index or video path")
     p.add_argument("--version", dest="run_version", default=None,
-                   help="model version (default: newest)")
+                   help='model version (default: newest; use "default" to '
+                        "download a hosted demo model)")
+    p.add_argument("--default", dest="run_version", action="store_const",
+                   const="default",
+                   help="use the hosted pre-trained demo model (downloads once)")
     p.add_argument("--threshold", type=float, default=0.5)
     p.add_argument("--smooth", type=int, default=5,
                    help="frames of agreement before committing a label")
